@@ -11,10 +11,11 @@ urlcolor: blue
 header-includes: 
    \usepackage{float}
    \floatplacement{figure}{H}
-   \floatplacement{table}{H}  
-# \setlength{\abovecaptionskip}{-5pt} 
-
- # Include bibliography
+   \floatplacement{table}{H}
+   \setlength{\abovecaptionskip}{-5pt plus 2pt minus 2pt}
+# to reduce space between figure/table and caption
+ 
+# Include bibliography
 bibliography: GaitRec.bib
 biblio-style: apalike
 ---
@@ -24,6 +25,8 @@ library(knitr)
 library(mlbench)
 library(tidyverse)
 library(gridExtra) # plotting functions
+library(grid)
+library(gtable)
 library(kableExtra) # table functions
 library(bookdown) 
 library(broom) # tidy output
@@ -45,11 +48,11 @@ knitr::opts_chunk$set(
 
 ## 1.1 Summary
 
-This document analyses the *GaitRec* dataset which is freely available online (<https://doi.org/10.6084/m9.figshare.c.4788012.v1>). The dataset has, furthermore, been published by Horsak et al. in Nature, Scientific Data [@Horsak2020]. It contains a large-scale dataset of *ground reaction forces* (GRF) during walking of 211 healthy (HC) and 2084 impaired persons. Included patients had different conditions affecting either the hip (H), knee (K), ankle (A), or calcaneus (C). In total, 75.732 bi-lateral walking trials have been compiled.
+This document analyses the *GaitRec* dataset which is freely available [online](https://doi.org/10.6084/m9.figshare.c.4788012.v1). The dataset has, furthermore, been published by Horsak et al. in Nature, Scientific Data [@Horsak2020]. It contains a large-scale dataset of *ground reaction forces* (GRF) during walking of 211 healthy (HC) and 2084 impaired persons. Included patients had different conditions affecting either the hip (H), knee (K), ankle (A), or calcaneus (C). In total, 75.732 bi-lateral walking trials have been compiled.
 
-Before the *GaitRec* dataset will be described in more detail (Chapter ...) and the research question will be explored (Chapter ...) and analyzed (Chapter ...) a short background information about GRF and gait analysis will be given. 
+Before the *GaitRec* dataset will be described in more detail (Chapter 1.3) and the research question will be explored (Chapter 1.4 and 2) and analyzed (Chapter 3) a short background information about GRF and gait analysis will be given. 
 
-## 1.2 Gait analysis and the definition of ground reaction forces
+## 1.2 Gait analysis and ground reaction forces
 
 Human movement is a complex topic and a growing research field. According to @bakerHistoryGaitAnalysis2007 Aristotle (384 until 322 BC) was one of the first known scientists to analyze human walking. It was not until the late 19th and early 20th century, however, that scientific methods started to be applied to gait analysis simulated by new measurement techniques. 
 
@@ -61,13 +64,13 @@ If a person would simply stand one such a plate it would measure the person's we
 knitr::include_graphics("GRF_walking.png")
 ```
 
-The GRF is defined in a 3D space and can be spitted in three parts, which represent the
+The GRF is defined in a 3D space and can be split in three components, which represent the
 
-* anterior-posterior (X-direction)
-* medial-lateral and (Y-direction)
-* vertical (Z-direction)
+* anterior-posterior AP (X)
+* medial-lateral ML (Y) and
+* vertical V (Z)
 
-direction. The X, Y, and Z labeling is arbitrary and can change throughout publications. The anterior-posterior direction defines the force produced in walking direction, the medial-lateral direction represents frontal forces and the vertical direction defines the force vertically through the body. During the stance phase of walking the GRF changes according to the acceleration and deceleration of the body on the force plate (see Figure \ref{GRF2}). 
+direction. The X, Y, and Z labeling is arbitrary and can change throughout publications. The X-direction defines the force produced in walking direction, the Y-direction represents frontal forces and the vertical Z- direction defines the force vertically through the body. During the stance phase of walking the GRF changes according to the acceleration and deceleration of the body on the force plate (see Figure \ref{GRF2}). 
 
 ```{r GRF2, fig.cap = "GRF distribution in X, Y and Z direction during the stance phase of walking. \\label{GRF2}", message = FALSE}
 GRFexample <- as_tibble(read_excel('GRF_Example.xlsx'))
@@ -113,30 +116,25 @@ ggplot(data = GRF_join, aes(x = Frame, group = variable)) +
                   arrow = arrow(length = unit(0.5, "cm")))
 ```
 
-Additionally to the three force components, another parameter related to the GRF is often analyzed, the so called *center of pressure* (COP). This parameter simply describes, where the force is centered under the foot, i.e., where the most force is concentrated and is defined in a 2D space on the floor. During gait, this COP is traveling from the heel (during initial foot contact on the floor) to the toes (at the end of stance when the foot leaves the ground). If one would imagine to observe the GRF from above, the COP would draw a line through the foot (see Figure \ref{COP}, adopted from DOI: 10.1007/s12541-017-0081-9). 
+Additionally to the three force components, another parameter related to the GRF is often analyzed, the so called *center of pressure* (COP). This parameter simply describes, where the force is centered under the foot, i.e., where the most force is concentrated. It is displayed in a 2D space onto the floor. During gait, this COP is traveling from the heel (during initial foot contact on the floor) to the toes (at the end of stance when the foot leaves the ground). If one would imagine to observe the GRF from above, the COP would draw a line through the foot (see Figure \ref{COP}, adopted from @limDevelopmentRealtimeGait2017). 
 
-```{r COP, out.width = "50%", fig.cap = "Vertical GRF vs. center of pressure line under the foot - view from above.\\label{COP}", fig.align="center"}
+```{r COP, out.width="80%", out.height="80%", fig.cap = "Vertical GRF vs. center of pressure line under the foot - view from above.\\label{COP}", fig.align="center"}
 knitr::include_graphics("GRF-and-COP.jpg")
 ```
 
-
 Like the GRF, the COP can be divided in its components, the 
 
-* anterior-posterior (X-direction) and
-* medial-lateral (Y-direction)
+* anterior-posterior AP (X) and
+* medial-lateral ML (Y)
 
-direction. The x-direction describes the propulsion of the COP in walking direction while the y-direction is the medial-lateral shift of the COP.
+direction. The X-direction of the COP describes the propulsion of the COP in walking direction while the Y-direction is the medial-lateral shift of the COP under the foot.
 
 
-## Discrete Parameters of the GRF and COP
+## 1.3 Discrete Parameters of the GRF and COP
 
-In case the musculoskeletal system is impaired, the shape of the GRF as well as the COP can change. To understand if these changes have a clinical impact on the patient, specific discrete parameters are analyzed in detail. These are the peak forces of each GRF component (see Figure \ref{GRF2}, arrows). For example, is the first peak of the vertical GRF enhanced and bigger on the impaired leg than on the healthy leg, the impaired leg might experience increased load leading to further pathological changes.
+In case the musculoskeletal system is impaired, the shape of the GRF as well as the COP can change (e.g., @johnContributionsMusclesMediolateral2012). To understand if these changes have a clinical impact on the patient, specific discrete parameters are analyzed in detail during a clinical gait analysis. These discrete parameters are the maximum and minimum forces of each GRF component during stance phase (see Figure \ref{GRF2}, arrows).
 
-* AP direction: 1 maximum and 1 minimum
-* ML direction: 2 maximum and 1 minimum (M-L GRF Force gait phases definition (<https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3438315/>))
-* V direction: 2 maximum and 1 minimum
-
-The the length of the COP line gives information about the walking stability of the patient. Is the length in X-direction shortened (i.e., distance between most distal to most proximal COP point) it might point to an asymmetric gait and a shorter single leg stance phase (i.e. when the contra-lateral leg is off the ground). An increase in a medial-lateral amplitude of the COP line (i.e., distance of most medial to most lateral point of the COP line) mostly implies insecurity during gait.
+The length of the COP line gives additionally information about the walking stability of the patient [@gaoCenterPressureProgression2019]. Is the length in X-direction shortened (i.e., distance between most distal to most proximal COP point) it might point to an asymmetric gait and a shorter single leg stance phase (i.e. when the contra-lateral leg is off the ground). An increase in a medial-lateral amplitude of the COP line (i.e., distance of most medial to most lateral point of the COP line) mostly implies insecurity during gait.
 
 Important discrete parameters related to the GRF and COP can be found in Table (\ref{tab:table1}).
 
@@ -163,16 +161,14 @@ varExpl <- c("Maximum of vertical GRF in first half of stance" ,
              "Length of COP course in medial-lateral direction during stance")
 
 kable(cbind(varNames,varExpl), 
-                caption = "Description of discrete variables", 
+                caption = "Discrete parameters of the GRF during walking", 
                 col.names = c("Variable Name","detailed information"),
       booktabs = T) %>% 
-  kable_styling(latex_options = "striped", font_size = 8) %>% 
-  add_footnote(c("GRF is normalized to body weight", "COP length is normalized to shoe size"), 
-               notation="none")
+  kable_styling(latex_options = "striped", font_size = 8)
 ```
 
 
-## 1.3 The *GaitRec* dataset
+## 1.4 The *GaitRec* dataset in detail
 
 ```{r readData, include=FALSE}
 # read in data
@@ -185,7 +181,14 @@ AllData <- read.csv('AllData.csv')
 str(metaData)
 ```
 
-The GaitRec dataset consists of several .CSV files. The main document ("GRF_metadata.csv") includes information about the participants and session (see Table ...), while the remaining files contain the raw and processed GRF and COP data. The raw data present the measurements purely received from the force plates, i.e., no data cleaning has been undertaken. In the processed files, following steps have been undertaken to clean and tidy up the dataset:
+The GaitRec dataset consists of several .CSV files. The main document ("GRF_metadata.csv") includes information about the participants and session (see Table \ref{tab:table2}), while the remaining files contain the raw and processed GRF and COP data. The raw data present the measurements purely received from the force plates, i.e., no data cleaning has been undertaken. In the processed files, following steps have been undertaken to clean and tidy up the dataset:
+
+- Force signals were filtered with a 2nd order low-pass butterworth filter with a cut-off frequency of 20Hz to reduce noise,
+- time normalized to 100% stance (i.e. 101 data points) to reduce effects temporal differences, and then
+- normalized to the body weight of each participant (force divided by the body mass times gravity) to reduce effects due to individual anthropometry.
+- Threshold of 80N to avoid inaccuracies in COP calculation at small force values
+- Medio-lateral COP coordinates were mean-centered 
+- Anterior-posterior coordinates zero-centered
 
 
 ```{r table2, echo = FALSE}
@@ -209,7 +212,9 @@ kable(cbind(varNames,varExpl),
   kable_styling(latex_options = "striped", font_size = 8)
 ```
 
-```{r Participants, message=FALSE}
+As described in Chapter 1.1, the dataset can be divided into five groups of participants, one healthy group and four different patient groups. Anthopometrics of each group is shown in Table \ref{Anthro}).
+
+```{r figureAnthro, message=FALSE, fig.cap = "Anthropometrics and number of cases of each sub-group.\\label{Anthro}"}
 # Group data by Subject ID to create overview table
 metaDataCompressed <- metaData %>% group_by(SUBJECT_ID) %>% 
   summarize(Group=first(CLASS_LABEL),
@@ -218,33 +223,55 @@ metaDataCompressed <- metaData %>% group_by(SUBJECT_ID) %>%
             Height=first(HEIGHT),
             BodyMass=mean(BODY_MASS))
 
-metaDataCompressed %>%
+table <- metaDataCompressed %>%
   group_by(Group) %>% 
-  summarise(patients = n(),
-            Age = round(mean(Age), digits = 0),
+  summarise(Age = round(mean(Age), digits = 0), #  patients = n()
             Height = round(mean(Height, na.rm = TRUE), digits = 0),
-            BodyMass = round(mean(BodyMass), digits = 0)) %>% 
-  kable(booktabs = T, caption = "Overview Participants",
-               col.names = c("Group", "Number of subjects", "Age (years)", "Height (cm)", "Body Mass (kg)")) %>% 
-  kable_styling(latex_options = "hold_position")
+            BodyMass = round(mean(BodyMass), digits = 0)) %>%
+    tableGrob()
 
-```
-Before we start to analyze the data set in detail we want to visualize the distribution of cases between groups, to gain an overview if groups have similar number of participants: 
+title <- textGrob("Group anthopometrics",gp=gpar(fontsize=12))
+padding <- unit(0.5,"line")
+table <- gtable_add_rows(table, 
+                         heights = grobHeight(title) + padding,
+                         pos = 0)
+table <- gtable_add_grob(table, title,
+                         t=1, l=1, 
+                         r=ncol(table))
 
-```{r distribution, fig.cap= "Number of cases per group", fig.height= 2, fig.width= 2, echo= FALSE}
 metaDataCompressed$Group <- as.factor(metaDataCompressed$Group)
-metaDataCompressed %>% ggplot(aes(Group)) +
+plot2 <- metaDataCompressed %>% ggplot(aes(Group)) +
   geom_bar(fill = c("#ff9999","#ffcccc","#ff9999","#ffcccc","#ff9999")) +
   xlab("Cardiovascular group") +
   ylab("Number of cases") +
   theme_bw()
-```
 
+gridExtra::grid.arrange(table, plot2, nrow = 1, bottom = textGrob("A = Ankle, C = Calcaneus, H = Hip, K = Knee, HC = Healthy Control", x = 1, hjust = 1, gp = gpar(fontface = 3L, fontsize = 9)))
+
+```
 
 
 Following parameters might have an effect on discrete variables:
 
 
+## 1.5 Reseach Question
 
+\newpage
+
+# 2 Methods
+
+\newpage
+
+# 3 Results
+
+\newpage
+
+# 4 Discussion
+
+\newpage
+
+# 5 Conclusion
+
+\newpage
 
 # References

@@ -177,16 +177,7 @@ kable(cbind(varNames,varExpl),
 ```{r readData, include=FALSE}
 # read in data
 metaData <- read.csv('GRF_metadata.csv')
-GRF_F_V_r <- read.csv('GRF_F_V_PRO_right.csv')
-GRF_F_V_l <- read.csv('GRF_F_V_PRO_left.csv')
-GRF_F_ML_r <- read.csv('GRF_F_ML_PRO_right.csv')
-GRF_F_ML_l <- read.csv('GRF_F_ML_PRO_left.csv')
-GRF_F_AP_r <- read.csv('GRF_F_AP_PRO_right.csv')
-GRF_F_AP_l <- read.csv('GRF_F_AP_PRO_left.csv')
-GRF_COP_AP_r <- read.csv('GRF_COP_AP_PRO_right.csv')
-GRF_COP_AP_l <- read.csv('GRF_COP_AP_PRO_left.csv')
-GRF_COP_ML_r <- read.csv('GRF_COP_ML_PRO_right.csv')
-GRF_COP_ML_l <- read.csv('GRF_COP_ML_PRO_left.csv')
+AllData <- read.csv('AllData.csv')
 ```
 
 ```{r dataStructure,  include=FALSE, message=FALSE, warning=FALSE, echo = FALSE}
@@ -249,79 +240,6 @@ metaDataCompressed %>% ggplot(aes(Group)) +
   theme_bw()
 ```
 
-
-```{r extractDiscretePM, echo = FALSE}
-### Extract variables of interest and include with meta data
-
-# Variable for each row
-GRF_F_V_r_max1 <- apply(GRF_F_V_r[,4:53],1,max)
-GRF_F_V_r_max2 <- apply(GRF_F_V_r[,54:104],1,max)
-GRF_F_V_r_min <- apply(GRF_F_V_r[,35:70],1,min)
-GRF_F_V_l_max1 <- apply(GRF_F_V_l[,4:53],1,max)
-GRF_F_V_l_max2 <- apply(GRF_F_V_l[,54:104],1,max)
-GRF_F_V_l_min <- apply(GRF_F_V_l[,35:70],1,min)
-GRF_F_AP_r_max <- apply(GRF_F_AP_r[,4:104],1,max)
-GRF_F_AP_r_min <- apply(GRF_F_AP_r[,4:104],1,min)
-GRF_F_AP_l_max <- apply(GRF_F_AP_l[,4:104],1,max)
-GRF_F_AP_l_min <- apply(GRF_F_AP_l[,4:104],1,min)
-GRF_F_ML_r_max1 <- apply(GRF_F_ML_r[,27:54],1,max)
-GRF_F_ML_r_max2 <- apply(GRF_F_ML_r[,68:98],1,max)
-GRF_F_ML_r_min <- apply(GRF_F_ML_r[,4:14],1,min)
-GRF_F_ML_l_max1 <- apply(GRF_F_ML_l[,27:54],1,max)
-GRF_F_ML_l_max2 <- apply(GRF_F_ML_l[,68:98],1,max)
-GRF_F_ML_l_min <- apply(GRF_F_ML_l[,4:14],1,min)
-GRF_COP_AP_r_length <- (apply(GRF_COP_AP_r[,4:104],1,max) - apply(GRF_COP_AP_r[,4:104],1,min))
-GRF_COP_AP_l_length <- (apply(GRF_COP_AP_l[,4:104],1,max) - apply(GRF_COP_AP_l[,4:104],1,min))
-GRF_COP_ML_r_length <- (apply(GRF_COP_ML_r[,4:104],1,max) - apply(GRF_COP_ML_r[,4:104],1,min))
-GRF_COP_ML_l_length <- (apply(GRF_COP_ML_l[,4:104],1,max) - apply(GRF_COP_ML_l[,4:104],1,min))
-
-# mean for each session
-varData <- cbind(GRF_F_V_r[1:3],GRF_F_V_r_max1,
-                 GRF_F_V_l_max1,
-                 GRF_F_V_r_max2,
-                 GRF_F_V_l_max2,
-                 GRF_F_V_r_min,
-                 GRF_F_V_l_min,
-                 GRF_F_AP_r_max,
-                 GRF_F_AP_l_max,
-                 GRF_F_AP_r_min,
-                 GRF_F_AP_l_min,
-                 GRF_F_ML_r_max1,
-                 GRF_F_ML_l_max1,
-                 GRF_F_ML_r_max2,
-                 GRF_F_ML_l_max2,
-                 GRF_F_ML_r_min,
-                 GRF_F_ML_l_min,
-                 GRF_COP_AP_r_length,
-                 GRF_COP_AP_l_length,
-                 GRF_COP_ML_r_length,
-                 GRF_COP_ML_l_length)
-
-varData_av <- varData %>% group_by(SUBJECT_ID,SESSION_ID) %>% 
-  summarize(GRF_F_V_r_max1 = mean(GRF_F_V_r_max1),
-            GRF_F_V_l_max1 = mean(GRF_F_V_l_max1),
-            GRF_F_V_r_max2 = mean(GRF_F_V_r_max2),
-            GRF_F_V_l_max2 = mean(GRF_F_V_l_max2),
-            GRF_F_V_r_min = mean(GRF_F_V_r_min),
-            GRF_F_V_l_min = mean(GRF_F_V_l_min),
-            GRF_F_AP_r_max = mean(GRF_F_AP_r_max),
-            GRF_F_AP_l_max = mean(GRF_F_AP_l_max),
-            GRF_F_AP_r_min = mean(GRF_F_AP_r_min),
-            GRF_F_AP_l_min = mean( GRF_F_AP_l_min),
-            GRF_F_ML_r_max1 = mean(GRF_F_ML_r_max1),
-            GRF_F_ML_l_max1 = mean(GRF_F_ML_l_max1),
-            GRF_F_ML_r_max2 = mean( GRF_F_ML_r_max2),
-            GRF_F_ML_l_max2 = mean(GRF_F_ML_l_max2),
-            GRF_F_ML_r_min = mean(GRF_F_ML_r_min),
-            GRF_F_ML_l_min = mean(GRF_F_ML_l_min),
-            GRF_COP_AP_r_length = mean(GRF_COP_AP_r_length),
-            GRF_COP_AP_l_length = mean(GRF_COP_AP_l_length),
-            GRF_COP_ML_r_length = mean(GRF_COP_ML_r_length),
-            GRF_COP_ML_l_length = mean(GRF_COP_ML_l_length))
-
-allData <-cbind(metaData,varData_av[,3:22])
-
-```
 
 
 Following parameters might have an effect on discrete variables:

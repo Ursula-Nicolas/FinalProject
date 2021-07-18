@@ -1,0 +1,17 @@
+base
+knitr
+mlbench
+tidyverse
+ggplot2
+tibble
+tidyr
+readr
+purrr
+dplyr
+stringr
+forcats
+gridExtra
+kableExtra
+bookdown
+broom
+readxl

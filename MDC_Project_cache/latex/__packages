@@ -16,3 +16,6 @@ bookdown
 broom
 readxl
 gtable
+qwraps2
+rstatix
+ggpubr

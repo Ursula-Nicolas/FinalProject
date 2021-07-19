@@ -2,9 +2,11 @@
 output: 
   pdf_document:
     includes:
-      before_body: before_body.tex  # Title page  
+      before_body: before_body.tex  # Title page 
+      #after_body: appendix.md 
     fig_caption: yes # Give figues a caption
     toc: true # Table of contents
+    number_sections: true
 urlcolor: blue
 
 # That figues stay in line with text
@@ -12,12 +14,17 @@ header-includes:
    \usepackage{float}
    \floatplacement{figure}{H}
    \floatplacement{table}{H}
-   \setlength{\abovecaptionskip}{-5pt plus 2pt minus 2pt}
+   \usepackage{xcolor}
+   \definecolor{grey}{RGB}{47,79,79}
+   \usepackage{caption}
+   \usepackage[font={color=grey,bf,small},justification=centering, figurename=Fig.,labelfont={it},textfont={it}]{caption}
+# \setlength{\abovecaptionskip}{-5pt plus 2pt minus 2pt}
 # to reduce space between figure/table and caption
  
 # Include bibliography
 bibliography: GaitRec.bib
 biblio-style: apalike
+fontsize: 12pt
 ---
 
 ```{r load, message=FALSE, warning=FALSE, echo = FALSE}
@@ -31,6 +38,10 @@ library(kableExtra) # table functions
 library(bookdown) 
 library(broom) # tidy output
 library(readxl) # Read in excel files
+library(qwraps2) # mean and sd as string
+library(rstatix) # --> Shapiro Test
+library(ggpubr)
+options(qwraps2_markup = "markdown")
 #library(citr) # Easy citation https://github.com/crsh/citr
 ```
 
@@ -39,29 +50,30 @@ knitr::opts_chunk$set(
   echo = FALSE,
   include = TRUE,
   cache = TRUE,
+  warning=FALSE,
   fig.pos = "H")
 ```
 
 \newpage
 
-# 1 Introduction
+# Introduction
 
-## 1.1 Summary
+## Summary
 
 This document analyses the *GaitRec* dataset which is freely available [online](https://doi.org/10.6084/m9.figshare.c.4788012.v1). The dataset has, furthermore, been published by Horsak et al. in Nature, Scientific Data [@Horsak2020]. It contains a large-scale dataset of *ground reaction forces* (GRF) during walking of 211 healthy (HC) and 2084 impaired persons. Included patients had different conditions affecting either the hip (H), knee (K), ankle (A), or calcaneus (C). In total, 75.732 bi-lateral walking trials have been compiled.
 
 Before the *GaitRec* dataset will be described in more detail (Chapter 1.3) and the research question will be explored (Chapter 1.4 and 2) and analyzed (Chapter 3) a short background information about GRF and gait analysis will be given. 
 
-## 1.2 Gait analysis and ground reaction forces
+## Gait analysis and ground reaction forces
 
 Human movement is a complex topic and a growing research field. According to @bakerHistoryGaitAnalysis2007 Aristotle (384 until 322 BC) was one of the first known scientists to analyze human walking. It was not until the late 19th and early 20th century, however, that scientific methods started to be applied to gait analysis simulated by new measurement techniques. 
 
 Two main areas are mainly covered in human movement analysis: *kinematics* - the science of movement (without considering the forces which are responsible for the movements), and *kinetics* - the science of forces producing these movements. One such force acting on the body is the GRF which is the response of the ground to the foot contact. This GRF can be measured using so called force plates, which are normally embedded into the floor. 
 
-If a person would simply stand one such a plate it would measure the person's weight in Newton. Due to Newton's third law ("every action has an equal and opposite reaction") the measured force is the same force the person is "putting" into the ground but has opposite direction [@NewtonLawsMotion2021]. This means that the GRF would point vertically through the body. When the person is walking over the force plate, the GRF can increase due to acceleration forces and its direction is changing according to the center of mass of the person, see Figure \ref{GRF}.
+If a person would simply stand one such a plate it would measure the person's weight in Newton. Due to Newton's third law ("every action has an equal and opposite reaction") the measured force is the same force the person is "putting" into the ground but has opposite direction [@NewtonLawsMotion2021]. This means that the GRF would point vertically through the body. When the person is walking over the force plate, the GRF can increase due to acceleration forces and its direction is changing according to the center of mass of the person, see Figure \ref{GRF_COP} left.
 
-```{r GRF, fig.cap = "Progression of the ground reaction force during walking - sagittal view.\\label{GRF}", fig.align="center"}
-knitr::include_graphics("GRF_walking.png")
+```{r GRF_COP, fig.cap = "Progression of GRF under the foot - sagittal view (left) and view from above (right).\\label{GRF_COP}", fig.align="center"}
+knitr::include_graphics("GRF_COP.png")
 ```
 
 The GRF is defined in a 3D space and can be split in three components, which represent the
@@ -72,22 +84,21 @@ The GRF is defined in a 3D space and can be split in three components, which rep
 
 direction. The X, Y, and Z labeling is arbitrary and can change throughout publications. The X-direction defines the force produced in walking direction, the Y-direction represents frontal forces and the vertical Z- direction defines the force vertically through the body. During the stance phase of walking the GRF changes according to the acceleration and deceleration of the body on the force plate (see Figure \ref{GRF2}). 
 
-```{r GRF2, fig.cap = "GRF distribution in X, Y and Z direction during the stance phase of walking. \\label{GRF2}", message = FALSE}
+```{r GRF2, fig.height= 2, fig.width= 4, fig.cap = "GRF distribution in X, Y and Z direction during the stance phase of walking. Arrows define discrete parameters of interest. \\label{GRF2}", message = FALSE}
+# Load example data for GRF traces
 GRFexample <- as_tibble(read_excel('GRF_Example.xlsx'))
-
+# Prepare data for figure
 GRFmeans_long <- GRFexample %>% 
   select(Frame,Z_mean,Y_mean,X_mean) %>% 
   rename(Z = Z_mean, Y = Y_mean, X = X_mean) %>% 
   gather(key = "variable", value = "mean", -Frame)
-
 GRFsd_long <- GRFexample %>% 
   select(Frame,Z_SD,Y_SD,X_SD) %>% 
   rename(Z = Z_SD, Y = Y_SD, X = X_SD) %>% 
   gather(key = "variable", value = "sd", -Frame)
-
 GRF_join <- GRFmeans_long %>% 
   left_join(GRFsd_long)
-
+# Create figure and include arrows which point to discrete parameters
 ggplot(data = GRF_join, aes(x = Frame, group = variable)) + 
   geom_line(aes(y = mean, color = variable), size = 1) + 
   geom_ribbon(aes(y = mean, ymin = mean - sd, ymax = mean + sd, fill = variable), alpha = .2) +
@@ -95,7 +106,7 @@ ggplot(data = GRF_join, aes(x = Frame, group = variable)) +
   ylab("Force [N]") + 
   theme_bw() +  
   theme(legend.key = element_blank()) + 
-  theme(plot.margin=unit(c(1,3,1,1),"cm"))+
+  theme(plot.margin=unit(c(0,0.2,0,0),"null"))+
   theme(legend.position = c(1.1,.6), legend.direction = "vertical") +
   theme(legend.title = element_blank()) +
   geom_segment(aes(x = 23, y = 0.85, xend = 23, yend = 1), colour = "blue",
@@ -116,11 +127,8 @@ ggplot(data = GRF_join, aes(x = Frame, group = variable)) +
                   arrow = arrow(length = unit(0.5, "cm")))
 ```
 
-Additionally to the three force components, another parameter related to the GRF is often analyzed, the so called *center of pressure* (COP). This parameter simply describes, where the force is centered under the foot, i.e., where the most force is concentrated. It is displayed in a 2D space onto the floor. During gait, this COP is traveling from the heel (during initial foot contact on the floor) to the toes (at the end of stance when the foot leaves the ground). If one would imagine to observe the GRF from above, the COP would draw a line through the foot (see Figure \ref{COP}, adopted from @limDevelopmentRealtimeGait2017). 
+Additionally to the three force components, another parameter related to the GRF is often analyzed, the so called *center of pressure* (COP). This parameter simply describes, where the force is centered under the foot, i.e., where the most force is concentrated. It is displayed in a 2D space onto the floor. During gait, this COP is traveling from the heel (during initial foot contact on the floor) to the toes (at the end of stance when the foot leaves the ground). If one would imagine to observe the GRF from above, the COP would draw a line through the foot (see Figure \ref{GRF_COP} right side, adopted from @limDevelopmentRealtimeGait2017). 
 
-```{r COP, out.width="80%", out.height="80%", fig.cap = "Vertical GRF vs. center of pressure line under the foot - view from above.\\label{COP}", fig.align="center"}
-knitr::include_graphics("GRF-and-COP.jpg")
-```
 
 Like the GRF, the COP can be divided in its components, the 
 
@@ -130,7 +138,7 @@ Like the GRF, the COP can be divided in its components, the
 direction. The X-direction of the COP describes the propulsion of the COP in walking direction while the Y-direction is the medial-lateral shift of the COP under the foot.
 
 
-## 1.3 Discrete Parameters of the GRF and COP
+## Discrete Parameters of the GRF and COP
 
 In case the musculoskeletal system is impaired, the shape of the GRF as well as the COP can change (e.g., @johnContributionsMusclesMediolateral2012). To understand if these changes have a clinical impact on the patient, specific discrete parameters are analyzed in detail during a clinical gait analysis. These discrete parameters are the maximum and minimum forces of each GRF component during stance phase (see Figure \ref{GRF2}, arrows).
 
@@ -160,15 +168,15 @@ varExpl <- c("Maximum of vertical GRF in first half of stance" ,
              "Length of COP course in anterior-posterior direction during stance", 
              "Length of COP course in medial-lateral direction during stance")
 
-kable(cbind(varNames,varExpl), 
-                caption = "Discrete parameters of the GRF during walking", 
+cbind(varNames,varExpl) %>% 
+  kbl(caption = "Discrete parameters of the GRF during walking", 
                 col.names = c("Variable Name","detailed information"),
       booktabs = T) %>% 
-  kable_styling(latex_options = "striped", font_size = 8)
+  kable_styling(latex_options = "striped", font_size = 10)
 ```
 
 
-## 1.4 The *GaitRec* dataset in detail
+## The *GaitRec* dataset in detail
 
 ```{r readData, include=FALSE}
 # read in data
@@ -176,12 +184,12 @@ metaData <- read.csv('GRF_metadata.csv')
 AllData <- read.csv('AllData.csv')
 ```
 
-```{r dataStructure,  include=FALSE, message=FALSE, warning=FALSE, echo = FALSE}
+```{r dataStructure,  include=FALSE, message=FALSE, echo = FALSE}
 #Data types of variables
 str(metaData)
 ```
 
-The GaitRec dataset consists of several .CSV files. The main document ("GRF_metadata.csv") includes information about the participants and session (see Table \ref{tab:table2}), while the remaining files contain the raw and processed GRF and COP data. The raw data present the measurements purely received from the force plates, i.e., no data cleaning has been undertaken. In the processed files, following steps have been undertaken to clean and tidy up the dataset:
+The GaitRec dataset consists of several .CSV files. The main document ("GRF_metadata.csv") includes main information about the participants and measurement trial (see Table \ref{tab:table2}). The remaining files contain the raw and pre-processed GRF and COP time series of the stance phase of walking. The raw data present the measurements purely received from the force plates, i.e., no data cleaning has been undertaken. In the pre-processed files, following steps have been undertaken to clean and tidy up the dataset:
 
 - Force signals were filtered with a 2nd order low-pass butterworth filter with a cut-off frequency of 20Hz to reduce noise,
 - time normalized to 100% stance (i.e. 101 data points) to reduce effects temporal differences, and then
@@ -190,47 +198,87 @@ The GaitRec dataset consists of several .CSV files. The main document ("GRF_meta
 - Medio-lateral COP coordinates were mean-centered 
 - Anterior-posterior coordinates zero-centered
 
+This report includes the pre-processed GRF and COP dataset.
 
 ```{r table2, echo = FALSE}
-varNames <- c( "Healthy condition",
-               "Sex" , 
-               "Age" , 
-               "Shod condition" , 
-               "Insole" , 
-               "Speed")
-varExpl <- c("Where the participant had an injury (calcaneus, ankle, knee, hip) or healthy",
-             "Gender male or female" , 
-             "Age of participant in years" , 
-             "Shoed or barfeet walking" , 
-             "With or without orthopaedic insoles" , 
-             "Walking speed")
+varNames <- c( "Sex (male, female)" , 
+               "Age (years)" , 
+               "Height (cm)",
+               "Body mass (kg) and weight (kg*m/s^2)",
+               "Shoe size (EU)" , 
+               "Affected side (left, right, both)")
+varExpl <- c("Shod condition (barefoot, shoe)",
+             "Orthopaedic insole (yes, no)" , 
+             "Walking speed (slow, self-selected, fast)" , 
+             "Readmission into hospital (yes, no)" , 
+             "Session type (initial vs. control measurement)" , 
+             "Session date")
 
 kable(cbind(varNames,varExpl), 
-                caption = "Influencing factors", 
-                col.names = c("Variable Name","detailed information"),
+                caption = "Participant and trial metadata of the GaitRec dataset", 
+                col.names = c("Participant","Walking trial"),
       booktabs = T) %>% 
-  kable_styling(latex_options = "striped", font_size = 8)
+  kable_styling(latex_options = "striped", font_size = 10)
 ```
+As described in Chapter 1.1, participants can be divided into five different groups, one healthy group and four different patient groups. Number of participants per group varied slightly between subgroups (Figure \ref{Anthro B), however, all exceeded 200 number of cases. Anthropometrics of each group is summarized in Figure \ref{Anthro} A. A more detailed visualization of age and BMI distribution between groups is shown in sub-Figure C and D. 
+While anthropometrics are similar distributed between patient groups, the healthy control group seems to be younger with a smaller BMI than the patients. Running a Kruskal-Wallis-Test (Shapiro Test shows non-normal distribution) and a pairwise Wilcoxon test for Post-hoc analysis, differences can be shown between healthy controls and each patient group (see Figure \ref{Anthro} C and D). Analysis further down below will, therefore, include age and BMI as covariates.
 
-As described in Chapter 1.1, the dataset can be divided into five groups of participants, one healthy group and four different patient groups. Anthopometrics of each group is shown in Table \ref{Anthro}).
-
-```{r figureAnthro, message=FALSE, fig.cap = "Anthropometrics and number of cases of each sub-group.\\label{Anthro}"}
-# Group data by Subject ID to create overview table
+```{r AnthroStats,message = FALSE, include = FALSE}
+# Group data by Subject ID to create overview table and calculate BMI
 metaDataCompressed <- metaData %>% group_by(SUBJECT_ID) %>% 
   summarize(Group=first(CLASS_LABEL),
             Sex=first(SEX),
             Age=mean(AGE),
             Height=first(HEIGHT),
             BodyMass=mean(BODY_MASS))
+BMI <- metaDataCompressed$BodyMass/((metaDataCompressed$Height/100)^2)
+metaDataCompressed <- metaDataCompressed %>%  mutate(metaDataCompressed, BMI = BMI)
 
+# Check for normal distribution
+metaDataCompressed %>%
+  group_by(Group) %>%
+  shapiro_test(Age,BMI)
+
+# Kruskal Wallis Test
+KW_Age <- kruskal.test(metaDataCompressed$Age,metaDataCompressed$Group)
+KW_BMI <- kruskal.test(metaDataCompressed$BMI,metaDataCompressed$Group)
+
+# Post-hoc Test
+PH_Age <- pairwise.wilcox.test(metaDataCompressed$Age,metaDataCompressed$Group, p.adjust="bonferroni")
+PH_BMI <- pairwise.wilcox.test(metaDataCompressed$BMI,metaDataCompressed$Group, p.adjust="bonferroni")
+
+# For Figure definition of significant differences
+Age_pVal <- as.data.frame(t(PH_Age[["p.value"]])) %>% rownames_to_column(var = "Group") %>% 
+  as_tibble() %>% gather(condition,pAge,C:K) %>% filter(pAge < 0.05)
+pValAge_List <- vector()
+for(i in 1:nrow(Age_pVal)) {
+  pValAge_List[i] <- list(c(Age_pVal$Group[i],Age_pVal$condition[i]))
+}
+BMI_pVal <- as.data.frame(t(PH_BMI[["p.value"]])) %>% rownames_to_column(var = "Group") %>% 
+  as_tibble() %>% gather(condition,pBMI,C:K) %>% filter(pBMI < 0.05)
+pValBMI_List <- vector()
+for(i in 1:nrow(BMI_pVal)) {
+  pValBMI_List[i] <- list(c(BMI_pVal$Group[i],BMI_pVal$condition[i]))
+}
+```
+
+```{r figureAnthro, fig.height= 8, fig.width = 10.5, message=FALSE, fig.cap = "Anthropometrics and number of cases of each sub-group.\\label{Anthro}"}
+
+# Define Summary structure for mean and SD
+summary_str <- list("Data" = list("Age (years)" = ~ qwraps2::mean_sd(Age, denote_sd = "paren", na_rm = TRUE, show_n = "never", digits = 1),
+        "Height (cm)" = ~ qwraps2::mean_sd(Height, denote_sd = "paren", na_rm = TRUE, show_n = "never", digits = 1),
+         "Body mass (kg)" = ~ qwraps2::mean_sd(BodyMass, denote_sd = "paren", na_rm = TRUE, show_n = "never", digits = 1),
+        "BMI(km/m^2)" = ~ qwraps2::mean_sd(BMI, denote_sd = "paren", na_rm = TRUE, show_n = "never", digits = 1)))
+
+# Create table with summary information
 table <- metaDataCompressed %>%
-  group_by(Group) %>% 
-  summarise(Age = round(mean(Age), digits = 0), #  patients = n()
-            Height = round(mean(Height, na.rm = TRUE), digits = 0),
-            BodyMass = round(mean(BodyMass), digits = 0)) %>%
-    tableGrob()
+  group_by(Group) %>%
+  summary_table(summary_str) %>% 
+  tableGrob(., theme=ttheme_default(base_size = 10))
 
-title <- textGrob("Group anthopometrics",gp=gpar(fontsize=12))
+
+# Tidy up table and give it a title
+title <- textGrob("Mean (SD) of group anthopometrics",gp=gpar(fontsize=11))
 padding <- unit(0.5,"line")
 table <- gtable_add_rows(table, 
                          heights = grobHeight(title) + padding,
@@ -238,40 +286,203 @@ table <- gtable_add_rows(table,
 table <- gtable_add_grob(table, title,
                          t=1, l=1, 
                          r=ncol(table))
+table <- arrangeGrob(table, top = textGrob("A", x = unit(0, "npc")
+         , y   = unit(1, "npc"), just=c("left","top"),
+         gp=gpar(col="black", fontsize=14)))
 
+# Define a bar chart with numbers per group
 metaDataCompressed$Group <- as.factor(metaDataCompressed$Group)
-plot2 <- metaDataCompressed %>% ggplot(aes(Group)) +
-  geom_bar(fill = c("#ff9999","#ffcccc","#ff9999","#ffcccc","#ff9999")) +
+plot1 <- metaDataCompressed %>% ggplot(aes(Group)) +
+  geom_bar(fill = c("#D8D8D8","#727272","#D8D8D8","#727272","#D8D8D8")) +
   xlab("Cardiovascular group") +
   ylab("Number of cases") +
-  theme_bw()
+  labs(tag = "B") +
+  theme_bw() +
+  coord_fixed(ratio = 0.005)
 
-gridExtra::grid.arrange(table, plot2, nrow = 1, bottom = textGrob("A = Ankle, C = Calcaneus, H = Hip, K = Knee, HC = Healthy Control", x = 1, hjust = 1, gp = gpar(fontface = 3L, fontsize = 9)))
+# Distribution of age and BMI compared between groups
+plot2 <- metaDataCompressed %>% ggplot(aes(x=Group, y=Age, fill=Group)) + 
+  geom_boxplot(adjust=1.5, alpha=.4) + labs(tag = "C") + stat_compare_means(label.y = 105) +
+  stat_compare_means(comparisons = pValAge_List) + theme_bw()
+plot3 <- metaDataCompressed %>% ggplot(aes(x=Group, y=BMI, fill=Group)) + 
+  geom_boxplot(adjust=1.5, alpha=.4) + labs(tag = "D") + stat_compare_means(label.y = 68) +
+  stat_compare_means(comparisons = pValBMI_List) + theme_bw()
+
+# Combine Table and Figure, create footnote
+gridExtra::grid.arrange(table, plot1, plot2, plot3, nrow = 2, bottom = textGrob("A = Ankle, C = Calcaneus, H = Hip, K = Knee, HC = Healthy Control", x = 1, hjust = 1, gp = gpar(fontface = 3L, fontsize = 9)))
 
 ```
 
 
-Following parameters might have an effect on discrete variables:
+## Reseach Question
 
+A full gait analysis is time consuming and needs trained personnel. Calculating joint angles and joint moments as well as power needs professional knowledge and results are not intuitive to understand. Therefore, simply using GRF to analyze the walking pattern would be time efficient and can be undertaken by non-trained personnel, while distinctive differences in discrete parameters of the GRF ("higher", "lower") can be easily interpreted.
+The research question of this report is, therefore, if and which discrete parameters of the GRF can be used to distinguish between patients with impairments of the lower limb and a healthy control group. Furthermore, can distrete GRF parameters be used to distinguish within different pathologies of the lower limb?
 
-## 1.5 Reseach Question
+While age and BMI have already been shown to differ between healthy controls and patient groups and are identified as possible covariates, other main factors have been shown to influence gait analysis outcome: shod condition [@oeffingerComparisonGaitShoes1999] and walking speed [@schwartzEffectWalkingSpeed2008]. Therefore, both variables will be considered in the following analysis.
 
-\newpage
-
-# 2 Methods
-
-\newpage
-
-# 3 Results
+It is, therefore, hypothesized that differences in GRF can be classified to distinguish between healthy controls and patients. Also, different patient groups can be discriminated between each other. Change in walking speed and shod condition effect GRF for all groups (healthy controls and patients) as well as age and BMI.
 
 \newpage
 
-# 4 Discussion
+# Methods
+The pre-processed datasets provided by @horsakGaitRecLargescaleGround2020 have been further processed by extracting discrete parameters (see Appendix for coding), which are presented in Table \ref{tab:table1}. In another step, variables' data type have been checked, while variables "sex", "affected side", "shod condition", and "speed" have been changed from numeric to factor.
+
+```{r dataCleaning, include = FALSE}
+# Check data type of variables
+str(AllData)
+# Remove unnecessarry variables
+AllData <- subset(AllData, select = -c(CLASS_LABEL_DETAILED,ORTHOPEDIC_INSOLE,READMISSION))
+# Change nominal variables defined es number to factor
+AllData<- AllData %>% 
+  mutate(
+    SEX = factor(SEX, levels = c(0, 1), labels = c("female", "male")),
+    AFFECTED_SIDE = factor(AFFECTED_SIDE, exclude = NULL, levels = c(0, 1, 2, NA), labels = c("left", "right", "both", "none")),
+    SHOD_CONDITION = factor(SHOD_CONDITION, levels = c(0, 1, 2), labels = c("barefeet", "normalShoe", "orthopaedicShoe")),
+    SPEED = factor(SPEED, levels = c(1, 2, 3), labels = c("slow", "selfSelected", "fast"))
+    ) %>% 
+  mutate_if(is.character, as.factor)
+
+BMI <- AllData$BODY_MASS/((AllData$HEIGHT/100)^2)
+AllData <- AllData %>%  mutate(AllData, BMI = BMI)
+
+summary(AllData)
+sapply(AllData, function(x) sum(is.na(x)))
+```
+
+Within the whole dataset there are `r sum(is.na(AllData))` missing values, which are related to body height (and, therefore, BMI) and shoe size (`r sum(is.na(AllData$BMI))` , `r sum(is.na(AllData$SHOE_SIZE))` respectively). In total, information of `r sum(complete.cases(AllData))` participants are complete, while `r sum(!complete.cases(AllData))` participants have at least one missing value. This information is crucial for further analysis where body height (or BMI) and/or shoe size will play a role.
+
+Before one can decide for proper analysis strategy, the distribution of involved parameters has to be reviewed. Distribution of discrete parameters, which have been calculated, can be seen in Figure ....
+
+```{r distribution}
+
+dis1 <- ggplot(AllData, aes(GRF_F_V_r_max1)) +
+  geom_density() +
+  facet_wrap(. ~ CLASS_LABEL, nrow = 1)
+
+dis2 <- ggplot(AllData, aes(GRF_F_V_r_max2)) +
+  geom_density() +
+  facet_wrap(. ~ CLASS_LABEL, nrow = 1)
+
+
+
+```
+
+Furthermore, to receive a first view into the dataset and to latter be able to apply regression analysis, pairwise correlation coefficients will be calculated for numeric variables.
 
 \newpage
 
-# 5 Conclusion
+# Results
+
+\newpage
+
+# Discussion
+
+\newpage
+
+# Conclusion
 
 \newpage
 
 # References
+
+
+<div id="refs"></div>
+
+\newpage
+
+# Appendix
+
+## Code for pre-prcessed time series of GRF and COP to extract discrete parameters
+
+```{r eval=FALSE, echo= TRUE}
+# read in data
+metaData <- read.csv('GRF_metadata.csv')
+GRF_F_V_r <- read.csv('GRF_F_V_PRO_right.csv')
+GRF_F_V_l <- read.csv('GRF_F_V_PRO_left.csv')
+GRF_F_ML_r <- read.csv('GRF_F_ML_PRO_right.csv')
+GRF_F_ML_l <- read.csv('GRF_F_ML_PRO_left.csv')
+GRF_F_AP_r <- read.csv('GRF_F_AP_PRO_right.csv')
+GRF_F_AP_l <- read.csv('GRF_F_AP_PRO_left.csv')
+GRF_COP_AP_r <- read.csv('GRF_COP_AP_PRO_right.csv')
+GRF_COP_AP_l <- read.csv('GRF_COP_AP_PRO_left.csv')
+GRF_COP_ML_r <- read.csv('GRF_COP_ML_PRO_right.csv')
+GRF_COP_ML_l <- read.csv('GRF_COP_ML_PRO_left.csv')
+```
+
+```{r eval= FALSE, echo = TRUE}
+### Extract variables of interest and include with meta data
+
+# Variable for each row
+GRF_F_V_r_max1 <- apply(GRF_F_V_r[,4:53],1,max)
+GRF_F_V_r_max2 <- apply(GRF_F_V_r[,54:104],1,max)
+GRF_F_V_r_min <- apply(GRF_F_V_r[,35:70],1,min)
+GRF_F_V_l_max1 <- apply(GRF_F_V_l[,4:53],1,max)
+GRF_F_V_l_max2 <- apply(GRF_F_V_l[,54:104],1,max)
+GRF_F_V_l_min <- apply(GRF_F_V_l[,35:70],1,min)
+GRF_F_AP_r_max <- apply(GRF_F_AP_r[,4:104],1,max)
+GRF_F_AP_r_min <- apply(GRF_F_AP_r[,4:104],1,min)
+GRF_F_AP_l_max <- apply(GRF_F_AP_l[,4:104],1,max)
+GRF_F_AP_l_min <- apply(GRF_F_AP_l[,4:104],1,min)
+GRF_F_ML_r_max1 <- apply(GRF_F_ML_r[,27:54],1,max)
+GRF_F_ML_r_max2 <- apply(GRF_F_ML_r[,68:98],1,max)
+GRF_F_ML_r_min <- apply(GRF_F_ML_r[,4:14],1,min)
+GRF_F_ML_l_max1 <- apply(GRF_F_ML_l[,27:54],1,max)
+GRF_F_ML_l_max2 <- apply(GRF_F_ML_l[,68:98],1,max)
+GRF_F_ML_l_min <- apply(GRF_F_ML_l[,4:14],1,min)
+GRF_COP_AP_r_length <- (apply(GRF_COP_AP_r[,4:104],1,max) - 
+                          apply(GRF_COP_AP_r[,4:104],1,min))
+GRF_COP_AP_l_length <- (apply(GRF_COP_AP_l[,4:104],1,max) - 
+                          apply(GRF_COP_AP_l[,4:104],1,min))
+GRF_COP_ML_r_length <- (apply(GRF_COP_ML_r[,4:104],1,max) - 
+                          apply(GRF_COP_ML_r[,4:104],1,min))
+GRF_COP_ML_l_length <- (apply(GRF_COP_ML_l[,4:104],1,max) - 
+                          apply(GRF_COP_ML_l[,4:104],1,min))
+
+# mean for each session
+varData <- cbind(GRF_F_V_r[1:3],GRF_F_V_r_max1,
+                 GRF_F_V_l_max1,
+                 GRF_F_V_r_max2,
+                 GRF_F_V_l_max2,
+                 GRF_F_V_r_min,
+                 GRF_F_V_l_min,
+                 GRF_F_AP_r_max,
+                 GRF_F_AP_l_max,
+                 GRF_F_AP_r_min,
+                 GRF_F_AP_l_min,
+                 GRF_F_ML_r_max1,
+                 GRF_F_ML_l_max1,
+                 GRF_F_ML_r_max2,
+                 GRF_F_ML_l_max2,
+                 GRF_F_ML_r_min,
+                 GRF_F_ML_l_min,
+                 GRF_COP_AP_r_length,
+                 GRF_COP_AP_l_length,
+                 GRF_COP_ML_r_length,
+                 GRF_COP_ML_l_length)
+
+varData_av <- varData %>% group_by(SUBJECT_ID,SESSION_ID) %>% 
+  summarize(GRF_F_V_r_max1 = mean(GRF_F_V_r_max1),
+            GRF_F_V_l_max1 = mean(GRF_F_V_l_max1),
+            GRF_F_V_r_max2 = mean(GRF_F_V_r_max2),
+            GRF_F_V_l_max2 = mean(GRF_F_V_l_max2),
+            GRF_F_V_r_min = mean(GRF_F_V_r_min),
+            GRF_F_V_l_min = mean(GRF_F_V_l_min),
+            GRF_F_AP_r_max = mean(GRF_F_AP_r_max),
+            GRF_F_AP_l_max = mean(GRF_F_AP_l_max),
+            GRF_F_AP_r_min = mean(GRF_F_AP_r_min),
+            GRF_F_AP_l_min = mean( GRF_F_AP_l_min),
+            GRF_F_ML_r_max1 = mean(GRF_F_ML_r_max1),
+            GRF_F_ML_l_max1 = mean(GRF_F_ML_l_max1),
+            GRF_F_ML_r_max2 = mean( GRF_F_ML_r_max2),
+            GRF_F_ML_l_max2 = mean(GRF_F_ML_l_max2),
+            GRF_F_ML_r_min = mean(GRF_F_ML_r_min),
+            GRF_F_ML_l_min = mean(GRF_F_ML_l_min),
+            GRF_COP_AP_r_length = mean(GRF_COP_AP_r_length),
+            GRF_COP_AP_l_length = mean(GRF_COP_AP_l_length),
+            GRF_COP_ML_r_length = mean(GRF_COP_ML_r_length),
+            GRF_COP_ML_l_length = mean(GRF_COP_ML_l_length))
+
+allData <-cbind(metaData,varData_av[,3:22])
+
+```

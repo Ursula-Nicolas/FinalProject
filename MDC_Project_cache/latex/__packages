@@ -19,3 +19,12 @@ gtable
 qwraps2
 rstatix
 ggpubr
+GGally
+lattice
+caret
+Matrix
+lme4
+nlme
+mgcv
+leaps
+pROC
